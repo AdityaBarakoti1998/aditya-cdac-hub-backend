@@ -19,7 +19,8 @@ public class ReviewController {
     // Reviewer sees pending projects
     @GetMapping("/reviewer/projects/pending")
     public ResponseEntity<List<Project>> getPending() {
-        return ResponseEntity.ok(reviewService.getPendingProjects());
+        String email = AuthUtil.getCurrentUserEmail();
+        return ResponseEntity.ok(reviewService.getPendingProjectsForReviewer(email));
     }
 
     // Reviewer submits verdict

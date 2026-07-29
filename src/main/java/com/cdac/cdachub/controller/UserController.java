@@ -25,13 +25,13 @@ public class UserController {
         return ResponseEntity.ok(user);
     }
 
-    // ✅ Admin — get all users
+    //  Admin — get all users
     @GetMapping("/admin/users")
     public ResponseEntity<List<User>> getAllUsers() {
         return ResponseEntity.ok(userRepository.findAll());
     }
 
-    // ✅ Admin — change a user's role
+    //  Admin — change a user's role
     @PutMapping("/admin/users/{userId}/role")
     public ResponseEntity<?> updateRole(
             @PathVariable Long userId,
@@ -67,4 +67,24 @@ public class UserController {
             "role", newRole
         ));
     }
+    
+ // Admin — set which categories a reviewer specializes in
+    @PutMapping("/admin/users/{userId}/specializations")
+    public ResponseEntity<?> updateSpecializations(
+            @PathVariable Long userId,
+            @RequestBody Map<String, String> body) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setSpecializations(body.get("specializations"));
+        userRepository.save(user);
+
+        return ResponseEntity.ok(Map.of(
+            "message", "Specializations updated",
+            "user", user.getEmail(),
+            "specializations", user.getSpecializations()
+        ));
+    }
+    
 }

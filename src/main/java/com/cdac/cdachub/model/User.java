@@ -22,7 +22,7 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
 
-    // ✅ FIX: Never send these to frontend
+    //  Never send these to frontend
     @JsonIgnore
     private String googleId;
 
@@ -35,6 +35,8 @@ public class User {
     private Role role;
 
     private LocalDateTime createdAt;
+    
+    private String specializations;
 
     @PrePersist
     public void prePersist() {
