@@ -29,6 +29,12 @@ public class JwtUtil {
                 .signWith(getKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
+    
+    
+    public String generateRefreshToken() {
+        return java.util.UUID.randomUUID().toString();
+    }
+    
 
     public String extractEmail(String token) {
         return Jwts.parserBuilder()

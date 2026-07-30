@@ -1,18 +1,38 @@
 package com.cdac.cdachub.controller;
 
-import com.cdac.cdachub.model.Project;
-import com.cdac.cdachub.service.ProjectService;
-import com.cdac.cdachub.utils.AuthUtil;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import com.cdac.cdachub.dto.TeamMemberDTO;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map; // ✅ FIX 1: Added Map import
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.cdac.cdachub.dto.TeamMemberDTO;
+import com.cdac.cdachub.model.Project;
+import com.cdac.cdachub.repository.ProjectRepository;
+import com.cdac.cdachub.service.ProjectService;
+import com.cdac.cdachub.utils.AuthUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import lombok.RequiredArgsConstructor;
+
+
+
+
+
 
 @RestController
 @RequestMapping("/api")
@@ -21,11 +41,21 @@ import java.util.Map; // ✅ FIX 1: Added Map import
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectRepository projectRepository;
+    
+   
+    private static final String EMAIL_REGEX = "^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$";
+    private boolean isValidEmail(String email) {
+        return email != null && email.matches(EMAIL_REGEX);
+    }
 
     // PUBLIC — anyone can browse
     @GetMapping("/public/projects")
-    public ResponseEntity<List<Project>> getApproved() {
-        return ResponseEntity.ok(projectService.getApprovedProjects());
+    public ResponseEntity<Page<Project>> getApproved(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "12") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseEntity.ok(projectRepository.findByStatus(Project.Status.APPROVED, pageable));
     }
     
     @GetMapping("/public/projects/year/{year}")
@@ -62,6 +92,11 @@ public class ProjectController {
         if (guideName == null || guideName.isBlank() || guideEmail == null || guideEmail.isBlank())
             return ResponseEntity.badRequest().body(Map.of("error", "Guide name and email are required"));
 
+        
+        if (!isValidEmail(submitterEmail) || !isValidEmail(guideEmail)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please enter valid email addresses"));
+        }
+        
         // Team members are sent as a JSON string inside the FormData — parse it here
         List<TeamMemberDTO> teamList = new ArrayList<>();
         if (teamMembers != null && !teamMembers.isBlank()) {
@@ -70,6 +105,16 @@ public class ProjectController {
             if (teamList.size() > 12)
                 return ResponseEntity.badRequest().body(Map.of("error", "Maximum 12 team members allowed"));
         }
+        
+        
+        for (TeamMemberDTO m : teamList) {
+            if (!isValidEmail(m.getEmail())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid email for team member: " + m.getName()));
+            }
+        }
+        
+        
+        
 
         String email = AuthUtil.getCurrentUserEmail();
 
