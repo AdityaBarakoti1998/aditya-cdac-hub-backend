@@ -17,6 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.cdac.cdachub.model.Project;
 import com.cdac.cdachub.model.User;
@@ -24,6 +26,7 @@ import com.cdac.cdachub.repository.ProjectFileRepository;
 import com.cdac.cdachub.repository.ProjectRepository;
 import com.cdac.cdachub.repository.TeamMemberRepository;
 import com.cdac.cdachub.repository.UserRepository;
+import com.cdac.cdachub.model.ProjectFile;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectServiceTest {
@@ -164,5 +167,132 @@ class ProjectServiceTest {
 
         verify(projectRepository).findById(10L);
         verify(projectRepository, never()).delete(any(Project.class));
+    }
+    @Test
+    void testDeleteProject_Success() throws Exception {
+
+        Project project = new Project();
+
+        when(projectRepository.findById(1L))
+                .thenReturn(Optional.of(project));
+
+        projectService.deleteProject(1L);
+
+        verify(projectRepository).findById(1L);
+        verify(projectRepository).delete(project);
+    }
+    @Test
+    void testUpdateStatus_SaveCalled() {
+
+        Project project = new Project();
+
+        when(projectRepository.findById(5L))
+                .thenReturn(Optional.of(project));
+
+        when(projectRepository.save(any(Project.class)))
+                .thenReturn(project);
+
+        projectService.updateStatus(5L, Project.Status.REJECTED);
+
+        verify(projectRepository).findById(5L);
+        verify(projectRepository).save(project);
+
+        assertEquals(Project.Status.REJECTED, project.getStatus());
+    }
+    @Test
+    void testSubmitProject_Success() throws Exception {
+
+        ReflectionTestUtils.setField(
+                projectService,
+                "uploadDir",
+                System.getProperty("java.io.tmpdir"));
+
+        User user = new User();
+        user.setEmail("test@gmail.com");
+
+        when(userRepository.findByEmail("test@gmail.com"))
+                .thenReturn(Optional.of(user));
+
+        Project savedProject = new Project();
+
+        when(projectRepository.save(any(Project.class)))
+                .thenReturn(savedProject);
+
+        when(projectFileRepository.save(any()))
+                .thenReturn(null);
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "project.pdf",
+                "application/pdf",
+                "Hello World".getBytes());
+
+        Project result = projectService.submitProject(
+                "Library System",
+                "Description",
+                "Java",
+                "Web",
+                "https://github.com/test",
+                2026,
+                "July",
+                "Aditya",
+                "aditya@gmail.com",
+                "123",
+                "Guide",
+                "guide@gmail.com",
+                null,
+                "test@gmail.com",
+                List.of(file));
+
+        assertNotNull(result);
+
+        verify(userRepository).findByEmail("test@gmail.com");
+        verify(projectRepository).save(any(Project.class));
+        verify(projectFileRepository).save(any());
+    }
+    @Test
+    void testSubmitProject_ThrowsException_OnInvalidExtension() {
+
+        ReflectionTestUtils.setField(
+                projectService,
+                "uploadDir",
+                System.getProperty("java.io.tmpdir"));
+
+        User user = new User();
+        user.setEmail("test@gmail.com");
+
+        when(userRepository.findByEmail("test@gmail.com"))
+                .thenReturn(Optional.of(user));
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "virus.exe",
+                "application/octet-stream",
+                "dummy".getBytes());
+
+        RuntimeException ex = assertThrows(
+                RuntimeException.class,
+                () -> projectService.submitProject(
+                        "Title",
+                        "Description",
+                        "Java",
+                        "Web",
+                        "https://github.com/test",
+                        2026,
+                        "July",
+                        "Aditya",
+                        "aditya@gmail.com",
+                        "123",
+                        "Guide",
+                        "guide@gmail.com",
+                        null,
+                        "test@gmail.com",
+                        List.of(file)));
+
+        assertEquals("File type .exe is not allowed", ex.getMessage());
+
+        verify(userRepository).findByEmail("test@gmail.com");
+        verify(projectRepository, never()).save(any(Project.class));
+        verify(projectFileRepository, never()).save(any(ProjectFile.class));
     }
 }
