@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.cdac.cdachub.model.Project;
 import com.cdac.cdachub.model.Review;
@@ -24,31 +25,40 @@ public class ReviewService {
     private final UserRepository userRepository;
 
     // Reviewer submits their verdict on a project
-    public Review submitReview(Long projectId, String reviewerEmail,
-                                String feedback, String verdict) {
+    @Transactional
+    public Review submitReview(Long projectId, String reviewerEmail, String feedback, String verdict) {
 
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
+        //  Fix 3 — state-machine guard: someone may have already decided
+        // this project between when the reviewer's page loaded and now.
+        if (project.getStatus() != Project.Status.PENDING) {
+            throw new IllegalStateException(
+                "This project has already been reviewed (current status: " + project.getStatus() + ")");
+        }
+
         User reviewer = userRepository.findByEmail(reviewerEmail)
                 .orElseThrow(() -> new RuntimeException("Reviewer not found"));
 
-        // Save the review
+        //  Fix 7 — conflict of interest: can't review your own submission
+        if (project.getUser().getEmail().equalsIgnoreCase(reviewerEmail)) {
+            throw new IllegalStateException("You cannot review your own submitted project");
+        }
+
         Review review = Review.builder()
                 .project(project)
                 .reviewer(reviewer)
                 .feedback(feedback)
                 .verdict(Review.Verdict.valueOf(verdict.toUpperCase()))
                 .build();
-
         reviewRepository.save(review);
 
-        // Update project status based on verdict
-        if (verdict.equalsIgnoreCase("APPROVED")) {
-            project.setStatus(Project.Status.APPROVED);
-        } else {
-            project.setStatus(Project.Status.REJECTED);
-        }
+        project.setStatus(verdict.equalsIgnoreCase("APPROVED") ? Project.Status.APPROVED : Project.Status.REJECTED);
+
+        // This save is where @Version does its real work: if another
+        // transaction already modified this row since we loaded it,
+        // Hibernate throws ObjectOptimisticLockingFailureException here.
         projectRepository.save(project);
 
         return review;

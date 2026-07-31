@@ -40,4 +40,21 @@ public class GlobalExceptionHandler {
         e.printStackTrace();
         return ResponseEntity.internalServerError().body(Map.of("error", "An unexpected error occurred"));
     }
+    
+    
+    
+    
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<?> handleOptimisticLock(org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("error", "Someone else just updated this project. Please refresh and try again."));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<?> handleIllegalState(IllegalStateException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+    
+    
+    
 }
