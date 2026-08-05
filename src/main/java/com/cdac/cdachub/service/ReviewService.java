@@ -23,6 +23,7 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
 
     // Reviewer submits their verdict on a project
     @Transactional
@@ -59,8 +60,10 @@ public class ReviewService {
         // This save is where @Version does its real work: if another
         // transaction already modified this row since we loaded it,
         // Hibernate throws ObjectOptimisticLockingFailureException here.
-        projectRepository.save(project);
-
+        
+        //  Fix 4 — optimistic locking: if another reviewer already submitted a verdict, this save will fail
+        Project savedProject = projectRepository.save(project);
+        emailService.sendReviewDecisionEmail(savedProject, review);
         return review;
     }
 

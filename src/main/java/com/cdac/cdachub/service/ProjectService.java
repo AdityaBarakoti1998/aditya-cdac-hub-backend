@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,7 +35,7 @@ public class ProjectService {
     private final ProjectFileRepository projectFileRepository;
     private final UserRepository userRepository;
     private final TeamMemberRepository teamMemberRepository;
-
+    private final EmailService emailService;
     @Value("${app.upload.dir}")
     private String uploadDir;
 
@@ -85,6 +86,9 @@ public class ProjectService {
             projectFileRepository.save(ProjectFile.builder()
                     .fileName(f[0]).fileUrl(f[1]).fileType("DOCS").project(saved).build());
         }
+        
+        emailService.sendSubmissionReceivedEmail(saved);
+        emailService.notifyReviewersOfNewSubmission(saved, findReviewerEmailsForCategory(category));
 
         return saved;
     }
@@ -186,8 +190,10 @@ public class ProjectService {
         }
 
         // Save everything in one smooth, safe transaction
-        return projectRepository.save(project);
-    }
+        Project updated = projectRepository.save(project);
+        emailService.sendSubmissionReceivedEmail(updated);
+        emailService.notifyReviewersOfNewSubmission(updated, findReviewerEmailsForCategory(category));
+        return updated;    }
 
     private static final List<String> ALLOWED_EXTENSIONS =
     	    List.of("pdf", "zip", "doc", "docx", "ppt", "pptx", "png", "jpg", "jpeg");
@@ -204,6 +210,27 @@ public class ProjectService {
     public List<Project> getApprovedProjects() {
         return projectRepository.findByStatus(Project.Status.APPROVED);
     }
+    
+    
+    private List<String> findReviewerEmailsForCategory(String category) {
+        List<User> reviewers = userRepository.findByRole(User.Role.REVIEWER);
+        List<String> matching = reviewers.stream()
+                .filter(u -> u.getSpecializations() != null &&
+                        Arrays.stream(u.getSpecializations().split(","))
+                              .map(String::trim)
+                              .anyMatch(c -> c.equalsIgnoreCase(category)))
+                .map(User::getEmail)
+                .toList();
+
+        if (!matching.isEmpty()) return matching;
+
+        // ✅ Nobody's covering this category yet — alert Admins instead
+        // of letting the submission go silently unnoticed.
+        return userRepository.findByRole(User.Role.ADMIN).stream()
+                .map(User::getEmail)
+                .toList();
+    }
+    
 
     public List<Project> getMyProjects(String email) {
         User user = userRepository.findByEmail(email)
