@@ -2,7 +2,7 @@ package com.cdac.cdachub.controller;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map; // ✅ FIX 1: Added Map import
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,11 +29,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 
-
-
-
-
-
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -43,10 +38,56 @@ public class ProjectController {
     private final ProjectService projectService;
     private final ProjectRepository projectRepository;
     
-   
     private static final String EMAIL_REGEX = "^[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}$";
+    
     private boolean isValidEmail(String email) {
         return email != null && email.matches(EMAIL_REGEX);
+    }
+    
+    // Server-side validation list
+    private static final List<String> VALID_CATEGORIES = List.of(
+        "AI & ML", "Web Dev", "Mobile Apps", "Cybersecurity",
+        "Cloud & DevOps", "Data Science", "Blockchain", "IoT"
+    );
+
+    // =========================================================================
+    // ✅ HELPER 1: Single Shared Validator (Fixes Validation Drift)
+    // =========================================================================
+    private String validateProjectFields(String gitLink, String category, Integer year, String month, 
+                                         String submitterEmail, String submitterRollNo, 
+                                         String guideName, String guideEmail, List<TeamMemberDTO> teamList) {
+        if (gitLink == null || gitLink.isBlank()) return "Git link is required";
+        
+        
+     // Strict URL format check to ensure a valid web link is provided
+        if (!gitLink.matches("^https?://.+")) return "Git link must be a valid URL";
+        
+        if (!VALID_CATEGORIES.contains(category)) return "Invalid category: " + category;
+        if (year == null) return "Year is required";
+        if (month == null || month.isBlank()) return "Month is required";
+        if (submitterRollNo == null || submitterRollNo.isBlank()) return "Your roll number is required";
+        if (!isValidEmail(submitterEmail)) return "Please enter a valid email for yourself";
+        if (guideName == null || guideName.isBlank()) return "Guide name is required";
+        if (!isValidEmail(guideEmail)) return "Please enter a valid guide email";
+        if (teamList.size() > 12) return "Maximum 12 team members allowed";
+        
+        for (TeamMemberDTO m : teamList) {
+            if (!isValidEmail(m.getEmail())) return "Invalid email for team member: " + m.getName();
+        }
+        return null; // Null means no errors, validation passed!
+    }
+
+    // =========================================================================
+    // ✅ HELPER 2: JSON Parser for Team Members
+    // =========================================================================
+    private List<TeamMemberDTO> parseTeamMembers(String teamMembersJson) {
+        if (teamMembersJson == null || teamMembersJson.isBlank()) return new ArrayList<>();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.readValue(teamMembersJson, new TypeReference<List<TeamMemberDTO>>() {});
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid team member data format");
+        }
     }
 
     // PUBLIC — anyone can browse
@@ -63,7 +104,9 @@ public class ProjectController {
         return ResponseEntity.ok(projectService.getApprovedByYear(year));
     }
     
-    // STUDENT — submit project (needs JWT)
+    // =========================================================================
+    //  UPDATED: STUDENT — Submit New Project (Now uses helpers)
+    // =========================================================================
     @PostMapping("/student/projects")
     public ResponseEntity<?> submit(
             @RequestParam String title,
@@ -81,48 +124,60 @@ public class ProjectController {
             @RequestParam(required = false) String teamMembers,
             @RequestParam List<MultipartFile> files) throws Exception {
 
-        if (gitLink == null || gitLink.isBlank())
-            return ResponseEntity.badRequest().body(Map.of("error", "Git link is required"));
-        if (month == null || month.isBlank())
-            return ResponseEntity.badRequest().body(Map.of("error", "Month is required"));
-        if (year == null)
-            return ResponseEntity.badRequest().body(Map.of("error", "Year is required"));
-        if (submitterRollNo == null || submitterRollNo.isBlank())
-            return ResponseEntity.badRequest().body(Map.of("error", "Your roll number is required"));
-        if (guideName == null || guideName.isBlank() || guideEmail == null || guideEmail.isBlank())
-            return ResponseEntity.badRequest().body(Map.of("error", "Guide name and email are required"));
-
+        List<TeamMemberDTO> teamList = parseTeamMembers(teamMembers);
         
-        if (!isValidEmail(submitterEmail) || !isValidEmail(guideEmail)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Please enter valid email addresses"));
+        String validationError = validateProjectFields(gitLink, category, year, month, 
+                                                       submitterEmail, submitterRollNo, 
+                                                       guideName, guideEmail, teamList);
+        if (validationError != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", validationError));
         }
-        
-        // Team members are sent as a JSON string inside the FormData — parse it here
-        List<TeamMemberDTO> teamList = new ArrayList<>();
-        if (teamMembers != null && !teamMembers.isBlank()) {
-            ObjectMapper mapper = new ObjectMapper();
-            teamList = mapper.readValue(teamMembers, new TypeReference<List<TeamMemberDTO>>() {});
-            if (teamList.size() > 12)
-                return ResponseEntity.badRequest().body(Map.of("error", "Maximum 12 team members allowed"));
-        }
-        
-        
-        for (TeamMemberDTO m : teamList) {
-            if (!isValidEmail(m.getEmail())) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Invalid email for team member: " + m.getName()));
-            }
-        }
-        
-        
-        
 
         String email = AuthUtil.getCurrentUserEmail();
-
         Project p = projectService.submitProject(
             title, description, techStack, category, gitLink, year, month,
             submitterName, submitterEmail, submitterRollNo,
             guideName, guideEmail, teamList,
             email, files);
+
+        return ResponseEntity.ok(p);
+    }
+
+    // =========================================================================
+    //  NEW: STUDENT — Edit & Resubmit a rejected project
+    // =========================================================================
+    @PutMapping("/student/projects/{id}")
+    public ResponseEntity<?> resubmit(
+            @PathVariable Long id,
+            @RequestParam String title,
+            @RequestParam String description,
+            @RequestParam String techStack,
+            @RequestParam String category,
+            @RequestParam String gitLink,
+            @RequestParam Integer year,
+            @RequestParam String month,
+            @RequestParam String submitterName,
+            @RequestParam String submitterEmail,
+            @RequestParam String submitterRollNo,
+            @RequestParam String guideName,
+            @RequestParam String guideEmail,
+            @RequestParam(required = false) String teamMembers,
+            @RequestParam(required = false) List<MultipartFile> files) throws Exception {
+
+        List<TeamMemberDTO> teamList = parseTeamMembers(teamMembers);
+        
+        String validationError = validateProjectFields(gitLink, category, year, month, 
+                                                       submitterEmail, submitterRollNo, 
+                                                       guideName, guideEmail, teamList);
+        if (validationError != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", validationError));
+        }
+
+        String email = AuthUtil.getCurrentUserEmail();
+        Project p = projectService.resubmitProject(
+            id, email, title, description, techStack, category, gitLink, year, month, 
+            submitterName, submitterEmail, submitterRollNo, guideName, guideEmail, 
+            teamList, files);
 
         return ResponseEntity.ok(p);
     }

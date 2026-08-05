@@ -35,10 +35,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             }
 
             if (counts.computeIfAbsent(key, k -> new AtomicInteger(0)).incrementAndGet() > MAX_PER_HOUR) {
-                response.setStatus(429);
+                response.setStatus(429); // 429 Too Many Requests, NOT 403
                 response.setContentType("application/json");
-                response.getWriter().write("{\"error\":\"Too many submissions. Try again later.\"}");
-                return;
+                response.getWriter().write("{\"error\": \"Too many submissions. Try again later.\"}");
+                return; // Stops execution so it doesn't hit a 403 downstream
             }
         }
 

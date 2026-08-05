@@ -27,7 +27,7 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final RateLimitFilter rateLimitFilter;
 
-    // ✅ Allow React frontend to talk to Spring Boot
+    // Allow React frontend to talk to Spring Boot
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -43,7 +43,6 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // ✅ Apply CORS config
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session
@@ -69,20 +68,32 @@ public class SecurityConfig {
             	    .requestMatchers("/api/public/**").permitAll()
             	    .requestMatchers("/api/auth/refresh").permitAll()
             	    .requestMatchers("/oauth2/**", "/login/**").permitAll()
-            	    .requestMatchers("/api/student/**").hasAnyRole("STUDENT","ADMIN")
-            	    .requestMatchers("/api/reviewer/**").hasAnyRole("REVIEWER","ADMIN")
-            	    .requestMatchers("/api/admin/**").hasRole("ADMIN")
-            	    .requestMatchers("/api/user/admin/**").hasRole("ADMIN")
+            	    
+            	    
+            	    
+            	 // ✅ STUDENTS, REVIEWERS, and ADMINS can submit projects
+            	    .requestMatchers("/api/student/**").hasAnyAuthority("STUDENT", "ROLE_STUDENT", "REVIEWER", "ROLE_REVIEWER", "ADMIN", "ROLE_ADMIN")
+            	    
+            	    // ✅ MISSING LINE RESTORED: Only REVIEWERS and ADMINS can approve/reject projects!
+            	    .requestMatchers("/api/reviewer/**").hasAnyAuthority("REVIEWER", "ROLE_REVIEWER", "ADMIN", "ROLE_ADMIN")
+            	    //  MUST use hasAnyAuthority to prevent ROLE_ mismatch 403 errors
+            
+            	 //  Added REVIEWER to the list so they can submit projects too!
+            	    .requestMatchers("/api/student/**").hasAnyAuthority("STUDENT", "ROLE_STUDENT", "REVIEWER", "ROLE_REVIEWER", "ADMIN", "ROLE_ADMIN")
+            	    .requestMatchers("/api/admin/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+            	    .requestMatchers("/api/user/admin/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
+            	    
             	    .requestMatchers("/api/user/**").authenticated()
             	    .anyRequest().authenticated()
             	)
             .oauth2Login(oauth -> oauth
                 .successHandler(oAuth2SuccessHandler)
             )
-         // 1. Put JWT Filter right before the standard Password filter
+            
+            // Clean, correct filter chain order
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-   
-            .addFilterBefore(rateLimitFilter, org.springframework.security.web.authentication.logout.LogoutFilter.class);
+            .addFilterAfter(rateLimitFilter, JwtAuthFilter.class);
+          
         return http.build();
     }
 }

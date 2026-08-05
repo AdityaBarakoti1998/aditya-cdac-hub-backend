@@ -16,16 +16,23 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.time.LocalDateTime;
 
+// ✅ 1. ADDED THESE TWO IMPORTS
+import java.util.Arrays;
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository; // ✅ Added repository
+    private final RefreshTokenRepository refreshTokenRepository; 
     private final JwtUtil jwtUtil;
 
+    @Value("${app.admin.emails}")
+    private String adminEmailsConfig;
+    
     @Value("${app.frontend.url}")
-    private String frontendUrl; // ✅ Dynamic frontend URL from application properties
+    private String frontendUrl; 
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
@@ -41,14 +48,25 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         // Save user if first time login
         User user = userRepository.findByEmail(email).orElseGet(() -> {
-            long userCount = userRepository.count();
+            
+            // ====================================================================
+            //  2. CHANGED: Replaced the old "userCount == 0" logic with 
+            // the new secure environment variable check.
+            // ====================================================================
+            List<String> adminEmails = Arrays.stream(adminEmailsConfig.split(","))
+                    .map(String::trim)
+                    .map(String::toLowerCase)
+                    .toList();
+
+            boolean isConfiguredAdmin = adminEmails.contains(email.toLowerCase());
 
             User newUser = new User();
             newUser.setEmail(email);
             newUser.setName(name);
             newUser.setGoogleId(googleId);
             newUser.setAvatarUrl(avatar);
-            newUser.setRole(userCount == 0 ? User.Role.ADMIN : User.Role.STUDENT);
+            newUser.setRole(isConfiguredAdmin ? User.Role.ADMIN : User.Role.STUDENT);
+            // ====================================================================
 
             return userRepository.save(newUser);
         });
