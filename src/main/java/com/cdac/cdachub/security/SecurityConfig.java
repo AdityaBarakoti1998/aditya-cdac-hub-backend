@@ -31,7 +31,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(frontendUrl));
+        // ALLOW BOTH 5173 (FOR OLD WAY) AND LOCALHOST (FOR DOCKER)
+        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost"));
         config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

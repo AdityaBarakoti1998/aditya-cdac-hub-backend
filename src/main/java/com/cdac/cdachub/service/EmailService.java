@@ -60,7 +60,7 @@ public class EmailService {
             </div>
             """.formatted(escapeHtml(project.getCategory()), escapeHtml(project.getTitle()),
                            escapeHtml(project.getDescription()), escapeHtml(project.getSubmitterName()),
-                           frontendUrl + "/reviewer");
+                           frontendUrl + "/reviewer/projects/" + project.getId());
 
         for (String reviewerEmail : reviewerEmails) {
             sendHtmlEmail(reviewerEmail, null, subject, body);
@@ -76,6 +76,16 @@ public class EmailService {
             : "Action needed on your project: " + escapeHtml(project.getTitle());
 
         String body = approved
+        		//  html here is because we want to send a rich text email with
+        		//formatting and styling. HTML allows us to create visually appealing
+        		//emails with headings, paragraphs, links, and other elements that plain text
+        		//cannot provide. This enhances the user experience and makes the email more engaging.
+        		// we can do same thing in frontend using html and css but here we are sending email so we need to use html for rich text email.
+        		//  html here is because we want to send a rich text email with
+        		//formatting and styling. HTML allows us to create visually appealing
+        		//emails with headings, paragraphs, links, and other elements that plain text
+        		//cannot provide. This enhances the user experience and makes the email more engaging.
+        		
             ? """
                 <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;">
                     <h2 style="color:#16a34a;">🎉 Project Approved!</h2>
