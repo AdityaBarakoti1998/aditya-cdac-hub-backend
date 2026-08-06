@@ -1,12 +1,16 @@
 package com.cdac.cdachub.repository;
 
-import com.cdac.cdachub.model.User;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.cdac.cdachub.model.User;
 
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     Optional<User> findByGoogleId(String googleId);
+    List<User> findByRole(User.Role role);
 }
 // how this was working 
 // 1. User logs in with Google OAuth2
