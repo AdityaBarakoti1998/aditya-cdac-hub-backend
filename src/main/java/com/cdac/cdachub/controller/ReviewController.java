@@ -48,4 +48,12 @@ public class ReviewController {
         return ResponseEntity.ok(
             reviewService.getReviewsForProject(projectId));
     }
+    
+    
+    @GetMapping("/reviewer/projects/{id}")
+    public ResponseEntity<?> getProjectForReviewer(@PathVariable Long id) {
+        String email = AuthUtil.getCurrentUserEmail();
+        return ResponseEntity.ok(reviewService.getProjectForReviewer(id, email));
+    }
+    
 }

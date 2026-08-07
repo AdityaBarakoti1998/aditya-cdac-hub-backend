@@ -97,4 +97,29 @@ public class ReviewService {
     public List<Review> getReviewsForProject(Long projectId) {
         return reviewRepository.findByProjectId(projectId);
     }
+    
+    public Project getProjectForReviewer(Long projectId, String reviewerEmail) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new RuntimeException("Project not found"));
+
+        User reviewer = userRepository.findByEmail(reviewerEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        //  Admins can open anything. Reviewers are still bound to their
+        // assigned categories — a deep link can't be used to bypass
+        // category routing. A legitimate email link always passes this,
+        // since the category matched at the moment the email was sent.
+        if (reviewer.getRole() != User.Role.ADMIN) {
+            List<String> categories = reviewer.getSpecializations() == null
+                    ? List.of()
+                    : Arrays.stream(reviewer.getSpecializations().split(",")).map(String::trim).toList();
+
+            if (!categories.contains(project.getCategory())) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                    "This project isn't in your assigned category");
+            }
+        }
+        return project;
+    }
+    
 }
