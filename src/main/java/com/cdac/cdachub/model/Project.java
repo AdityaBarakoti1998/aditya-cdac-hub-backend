@@ -45,6 +45,9 @@ public class Project {
 
     @Column(nullable = false)
     private String month;
+    
+    private Boolean indexed = false;
+    private LocalDateTime indexedAt;
 
     //  NEW — captured fresh at submission time
     private String submitterName;
