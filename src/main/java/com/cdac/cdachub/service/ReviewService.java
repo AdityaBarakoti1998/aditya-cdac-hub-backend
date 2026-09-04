@@ -24,7 +24,7 @@ public class ReviewService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
-
+    private final RepoIndexingService repoIndexingService;
     // Reviewer submits their verdict on a project
     @Transactional
     public Review submitReview(Long projectId, String reviewerEmail, String feedback, String verdict) {
@@ -56,6 +56,9 @@ public class ReviewService {
         reviewRepository.save(review);
 
         project.setStatus(verdict.equalsIgnoreCase("APPROVED") ? Project.Status.APPROVED : Project.Status.REJECTED);
+        if (verdict.equalsIgnoreCase("APPROVED")) {
+            repoIndexingService.indexProject(project.getId());
+        }
 
         // This save is where @Version does its real work: if another
         // transaction already modified this row since we loaded it,
